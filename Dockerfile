@@ -36,6 +36,6 @@ RUN apt update -y && \
     xdg-utils
 
 COPY . .
-RUN chmod -R o+rwx node_modules/puppeteer/.local-chromium
 RUN npm ci
+RUN chmod -R o+rwx node_modules/puppeteer/.local-chromium
 CMD [ "node", "index.js" ]

@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"log"
 	"os"
 	"time"
@@ -31,6 +30,7 @@ func scrape() {
 	// Go to banamex
 	if _, err = page.Goto("http://bancanet.banamex.com/MXGCB/JPS/portal/LocaleSwitch.do?locale=es_MX/", playwright.PageGotoOptions{
 		WaitUntil: playwright.WaitUntilStateNetworkidle,
+		Timeout:   playwright.Float(60000),
 	}); err != nil {
 		log.Fatalf("could not goto: %v", err)
 	}
@@ -40,22 +40,22 @@ func scrape() {
 	}
 	// Fill login form
 	if err = page.Click("#textCliente"); err != nil {
-		log.Fatalf("could not goto: %v", err)
+		log.Fatalf("could not click on #textCliente: %v", err)
 	}
 	if err = page.Type("#textCliente", username); err != nil {
-		log.Fatalf("could not goto: %v", err)
+		log.Fatalf("could not type on #textCliente: %v", err)
 	}
 	if err = page.Press("#textCliente", "Enter"); err != nil {
-		log.Fatalf("could not goto: %v", err)
+		log.Fatalf("could not press enter on #textCliente: %v", err)
 	}
 	if err = page.Click("#textFirma"); err != nil {
-		log.Fatalf("could not goto: %v", err)
+		log.Fatalf("could not click on #textFirma: %v", err)
 	}
 	if err = page.Type("#textFirma", password); err != nil {
-		log.Fatalf("could not goto: %v", err)
+		log.Fatalf("could not type on #textFirma: %v", err)
 	}
 	if err = page.Press("#textFirma", "Enter"); err != nil {
-		log.Fatalf("could not goto: %v", err)
+		log.Fatalf("could not press enter on #textFirma: %v", err)
 	}
 
 	time.Sleep(5 * time.Second)
@@ -63,21 +63,27 @@ func scrape() {
 		log.Println("Popup didn't opened")
 	}
 
-	entries, err := page.QuerySelectorAll(".category-CRD > .account-mask-label")
+	entries, err := page.QuerySelectorAll(".account-list-content")
 	if err != nil {
 		log.Fatalf("could not get entries: %v", err)
 	}
+
+	if len(entries) > 0 {
+		log.Fatalln("Couldn't find accounts")
+	}
+
 	for i, entry := range entries {
-		// titleElement, err := entry.QuerySelector("td.title > a")
-		// if err != nil {
-		// 	log.Fatalf("could not get title element: %v", err)
-		// }
+		link, err := entry.QuerySelector(".account-mask-link")
+		if err != nil {
+			log.Fatalf("could not get title element: %v", err)
+		}
 		// title, err := titleElement.TextContent()
 		// if err != nil {
 		// 	log.Fatalf("could not get text content: %v", err)
 		// }
-		fmt.Printf("%d: %s\n", i+1, entry)
+		log.Printf("%d: %s\n", i+1, link)
 	}
+
 	// Screenshot to see where we at and close
 	if _, err = page.Screenshot(playwright.PageScreenshotOptions{
 		Path: playwright.String("foo.png"),

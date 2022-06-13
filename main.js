@@ -22,7 +22,7 @@ try {
   console.log('Navigating to banamex...')
   await page.goto('https://bancanet.banamex.com/MXGCB/JPS/portal/Index.do')
   await page.setViewport({ width: 1280, height: 653 })
-  
+
   try {
     console.log('Checking for popup...')
     await page.waitForSelector('#splash-207555-close-button', {
@@ -39,9 +39,9 @@ try {
   await page.focus('#textCliente')
   await page.keyboard.type(user)
   await page.keyboard.press('Enter')
-  
+
   await navigationPromise
-  
+
   console.log('Filling password...')
   await page.waitForSelector('#textFirma')
   await page.focus('#textFirma')
@@ -52,19 +52,16 @@ try {
   await navigationPromise
 
   try {
-    console.log('Checking for error')
+    console.log('Checking for errors')
     await page.waitForSelector('#modal_commonError > div > div.clear.overflow > div.titulo.modaltitulo > p', {
       visible: true,
       timeout: 10000
     })
-    const errors = await page.evaluate(() => {
-      const list = Array.from(document.querySelectorAll('#container > div > div.puntos > div > p'))
-      return list.map(el => el.textContent)
-    })
+    const errors = await page.evaluate(() => Array.from(document.querySelectorAll('#container > div > div.puntos > div > p')).map(el => el.textContent))
     console.log(errors)
-    throw new Error(errors)
+    process.exit(0)
   } catch {
-    console.log('No error found...')
+    console.log('No errors found...')
   }
 
   try {
@@ -79,33 +76,72 @@ try {
 
   logged = true
 
-  await page.screenshot({ path: `screenshots/banamex.png` })
-
-  let accounts = [];
+  let accounts = []
   await page.waitForSelector('.account-list-content')
   const account_list = await page.$$('.account-list-content')
   for (const element of account_list) {
     const account_name = await element.$eval('.account-mask-label', label => label.textContent)
-    // if account_name
-    accounts.push(
-      {
-        link: `https://bancanet.banamex.com/apps/dashboardnew/${
-          await element.$eval('.account-mask-link', a => a.getAttribute('href'))}`,
-        name: account_name,
-      }
-    )
+    if (accounts_to_parse.indexOf(account_name) > -1) {
+      accounts.push(
+        {
+          link: `https://bancanet.banamex.com/apps/dashboardnew/${await element.$eval('.account-mask-link', a => a.getAttribute('href'))}`,
+          name: account_name,
+        }
+      )
+    }
   }
-  // .headermenu-ul > #ele-0 > a
-  console.log(`Accounts: ${JSON.stringify(accounts)}`)
 
-  await page.goto()
+  for (const account of accounts) {
+    console.log(`Retrieving ${account.name} data...`)
+    await page.goto(account.link)
+    // TODO: get current or past period
+    await navigationPromise
+    await page.waitForSelector('body > app-root > app-ada > app-demo-tdc > div.ada_section > div > app-ada-tdc > app-account-detail > div > div.info_area > div.table_info > app-row-info:nth-child(4) > div > div.text_right.label-01 > div')
+    const no_interests_amount = await page.$eval('body > app-root > app-ada > app-demo-tdc > div.ada_section > div > app-ada-tdc > app-account-detail > div > div.info_area > div.table_info > app-row-info:nth-child(4) > div > div.text_right.label-01 > div',
+      div => div.textContent)
+    account.no_interests_amount = Number(no_interests_amount.replace(/\s+/g, '').replace(/\,/g, '').replace(/\$/g, ''))
 
-  // await page.waitForSelector('app-accountlist-creditcard > .account-list-container > .account-list-content:nth-child(3) > .account-list > .flex > .flex > div > .account-mask-link > .account-mask-label')
-  // await page.click('app-accountlist-creditcard > .account-list-container > .account-list-content:nth-child(3) > .account-list > .flex > .flex > div > .account-mask-link > .account-mask-label')
+    account.data = await page.evaluate(() => {
+      const rows = Array.from(document.querySelectorAll('table tr'))
+      return Array.from(rows, (row) => {
+        const columns = Array.from(row.querySelectorAll('td'), column => column.innerText)
+        // The column 3 is filled if the row is a expense
+        if (columns[3]) {
+          const date = columns[0]
+          const amount = Number(columns[3].replace(/\s+/g, '').replace(/\,/g, '').replace(/\$/g, ''))
+          if (!amount){
+            // Rejected payment
+            return null
+          }
+          
+          let concept = columns[1]
+          const match = /(.*)\((\d*):(\d*)\)/g.exec(concept)
+          let current_month = null
+          let total_months = null
+          if (match) {
+            concept = match[1]
+            current_month = Number(match[2])
+            total_months = Number(match[3])
+          }
+          
+          return {
+            date,
+            amount,
+            concept,
+            current_month,
+            total_months,
+          }
+        }
+      }).filter((x) => x)
+    })
 
-  // await page.waitForSelector('.table-container > table > tbody > tr:nth-child(1) > .label-01')
-  // await page.click('.table-container > table > tbody > tr:nth-child(1) > .label-01')
+    delete account.link
+    account.total = account.data.reduce((accumulator, element) => {
+      return accumulator + element.amount;
+    }, 0);
+  }
 
+  console.log(JSON.stringify(accounts))
 } catch (err) {
   console.log(`❌ Error: ${err.message}`)
 } finally {

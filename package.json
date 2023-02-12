@@ -23,6 +23,7 @@
   },
   "homepage": "https://github.com/nthings/banamex-scraper#readme",
   "dependencies": {
+    "nightmare": "^3.0.2",
     "puppeteer": "^14.3.0"
   }
 }
